@@ -148,3 +148,137 @@ def run_dataset_validation(file_path="data/raw/bloodmnist.npz"):
 
 # Execute checking suite
 dataset_arrays = run_dataset_validation()
+
+#----------------------------NEXT STEP--------------------------
+# PREPROCESSING PIPELINE AND DATA LOADERS
+
+
+# ==============================================================================
+# Name: Zarar Bin Akram
+# SRN: 303-221057
+# File: Task 1.3 & 1.4 - Preprocessing & DataLoader Pipeline
+# Description: Implements image resizing, min-max normalization, sets
+#              deterministic seeds, and wraps data splits into PyTorch loaders.
+# ==============================================================================
+
+import torch
+import numpy as np
+from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as transforms
+from PIL import Image
+
+def set_deterministic_environment(seed=42):
+    """
+    Purpose:
+        Ensures perfect reproducibility across runs by locking all potential
+        sources of randomness in NumPy and PyTorch backends.
+    Inputs:
+        seed (int): The numerical seed value. Default is 42.
+    Outputs:
+        None
+    Assumptions:
+        Assumes the backend execution engine supports PyTorch deterministic flags.
+    """
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    print(f"[INFO] Deterministic execution seed locked at: {seed}")
+
+class BloodMNISTDataset(Dataset):
+    """
+    Purpose:
+        Custom PyTorch Dataset class to bridge raw NumPy arrays into a tensor
+        stream while dynamically applying target image preprocessing behaviors.
+    Inputs:
+        images (numpy.ndarray): Array containing raw images.
+        labels (numpy.ndarray): Array containing ground truth target labels.
+        transform (torchvision.transforms.Compose): Image manipulation pipeline.
+    Outputs:
+        Instance of torch.utils.data.Dataset wrapper.
+    Assumptions:
+        Assumes image channel ordering is standard RGB/Grayscale compatible with PIL.
+    """
+    def __init__(self, images, labels, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        # Extract single sample components
+        img = self.images[idx]
+        label = self.labels[idx]
+
+        # Convert NumPy array to PIL Image to enable standard torchvision transforms
+        img = Image.fromarray(img)
+
+        if self.transform:
+            img = self.transform(img)
+
+        # Convert label integer to torch tensor long format
+        label = torch.tensor(label, dtype=torch.long)
+        return img, label
+
+def generate_pipeline_loaders(data_dict, batch_size=64, seed=42):
+    """
+    Purpose:
+        Implements Task 1.3 preprocessing pipeline (Resize + Normalization)
+        and Task 1.4 deterministic data structuring into PyTorch DataLoaders.
+    Inputs:
+        data_dict (dict): Dictionary holding validated split arrays from Task 1.2.
+        batch_size (int): Training batch size. Defaults to 64.
+        seed (int): Reproducibility tracker seed. Defaults to 42.
+    Outputs:
+        train_loader (DataLoader): PyTorch training iterator.
+        val_loader (DataLoader): PyTorch validation monitoring iterator.
+        test_loader (DataLoader): PyTorch final testing iterator.
+    Assumptions:
+        Images are resized to 224x224 to offer full out-of-the-box support for
+        pretrained models (ResNet, VGG, MobileNet) in later tasks.
+    """
+    # Task 1.3: Define Preprocessing & Cleaning Pipeline Transformations
+    # Standardize scale to 224x224 and perform min-max scaling/tensor conversion
+    preprocessing_transforms = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) # Map ranges directly to [-1, 1]
+    ])
+
+    # Wrap underlying numpy structures into our Dataset instances
+    train_dataset = BloodMNISTDataset(data_dict['train_images'], data_dict['train_labels'], transform=preprocessing_transforms)
+    val_dataset = BloodMNISTDataset(data_dict['val_images'], data_dict['val_labels'], transform=preprocessing_transforms)
+    test_dataset = BloodMNISTDataset(data_dict['test_images'], data_dict['test_labels'], transform=preprocessing_transforms)
+
+    # Task 1.4: Establish Deterministic Loader Generation Seeds
+    g = torch.Generator()
+    g.manual_seed(seed)
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+
+    # Generate PyTorch DataLoader Streams
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True,
+        worker_init_fn=seed_worker, generator=g, drop_last=False
+    )
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    print("\n" + "="*60 + "\n[SUCCESS] DATALOADER GENERATION COMPLETE\n" + "="*60)
+    print(f"  -> Total Training Mini-Batches   : {len(train_loader)}")
+    print(f"  -> Total Validation Mini-Batches : {len(val_loader)}")
+    print(f"  -> Total Testing Mini-Batches    : {len(test_loader)}")
+
+    return train_loader, val_loader, test_loader
+
+# 1. Initialize random seeds for reproducibility (Task 1.4)
+set_deterministic_environment(seed=42)
+
+# 2. Extract DataLoaders using the global 'dataset_arrays' created in Task 1.2
+train_loader, val_loader, test_loader = generate_pipeline_loaders(dataset_arrays, batch_size=64)
