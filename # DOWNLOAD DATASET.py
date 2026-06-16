@@ -282,3 +282,216 @@ set_deterministic_environment(seed=42)
 
 # 2. Extract DataLoaders using the global 'dataset_arrays' created in Task 1.2
 train_loader, val_loader, test_loader = generate_pipeline_loaders(dataset_arrays, batch_size=64)
+
+#----------------------------NEXT STEP--------------------------
+# DEFINING THE 3, 4 AND 5 LAYER CNN ARCHITECTURE
+
+%%writefile models/custom_cnn.py
+# ==============================================================================
+# Name: Zarar Bin Akram
+# SRN: 303-221057
+# File: models/custom_cnn.py
+# Task: 2.1 - Custom Deep CNN Architectures (3, 4, and 5 layers)
+# ==============================================================================
+
+import torch
+import torch.nn as nn
+
+class CustomCNN3Layer(nn.Module):
+    """
+    Purpose:
+        Builds a 3-layer deep Custom Convolutional Neural Network.
+    Inputs:
+        num_classes (int): Total number of target output categories. Default is 8.
+    Outputs:
+        torch.Tensor: Logits tensor of shape (batch_size, num_classes).
+    Assumptions:
+        Assumes input images have dimensions of 3 channels x 224 pixels x 224 pixels.
+    """
+    def __init__(self, num_classes=8):
+        super(CustomCNN3Layer, self).__init__()
+
+        # Block 1: Conv -> BatchNorm -> Activation -> MaxPool -> Dropout
+        self.block1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.25)
+        ) # Output spatial shape: 112 x 112
+
+        # Block 2: Conv -> BatchNorm -> Activation -> MaxPool -> Dropout
+        self.block2 = nn.Sequential(
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.25)
+        ) # Output spatial shape: 56 x 56
+
+        # Block 3: Conv -> BatchNorm -> Activation -> MaxPool -> Dropout
+        self.block3 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.3)
+        ) # Output spatial shape: 28 x 28
+
+        # Fully Connected Classifier Head Block
+        # Flat features = 128 filters * 28 * 28 spatial pixels = 100,352 neurons
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 28 * 28, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.classifier(x)
+        return x
+
+
+class CustomCNN4Layer(nn.Module):
+    """
+    Purpose:
+        Builds a 4-layer deep Custom Convolutional Neural Network.
+    Inputs:
+        num_classes (int): Total number of target output categories. Default is 8.
+    Outputs:
+        torch.Tensor: Logits tensor of shape (batch_size, num_classes).
+    Assumptions:
+        Assumes input images have dimensions of 3 channels x 224 pixels x 224 pixels.
+    """
+    def __init__(self, num_classes=8):
+        super(CustomCNN4Layer, self).__init__()
+
+        self.block1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.25)
+        ) # 112 x 112
+
+        self.block2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.25)
+        ) # 56 x 56
+
+        self.block3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.3)
+        ) # 28 x 28
+
+        # Added Convolutional Block Layer 4
+        self.block4 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.3)
+        ) # Output spatial shape: 14 x 14
+
+        # Classifier Head Block
+        # Flat features = 256 filters * 14 * 14 spatial pixels = 50,176 neurons
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(256 * 14 * 14, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        x = self.classifier(x)
+        return x
+
+
+class CustomCNN5Layer(nn.Module):
+    """
+    Purpose:
+        Builds a 5-layer deep Custom Convolutional Neural Network.
+    Inputs:
+        num_classes (int): Total number of target output categories. Default is 8.
+    Outputs:
+        torch.Tensor: Logits tensor of shape (batch_size, num_classes).
+    Assumptions:
+        Assumes input images have dimensions of 3 channels x 224 pixels x 224 pixels.
+    """
+    def __init__(self, num_classes=8):
+        super(CustomCNN5Layer, self).__init__()
+
+        self.block1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.25)
+        ) # 112 x 112
+
+        self.block2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.25)
+        ) # 56 x 56
+
+        self.block3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.3)
+        ) # 28 x 28
+
+        self.block4 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.3)
+        ) # 14 x 14
+
+        # Added Convolutional Block Layer 5
+        self.block5 = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.Dropout(0.4)
+        ) # Output spatial shape: 7 x 7
+
+        # Classifier Head Block
+        # Flat features = 512 filters * 7 * 7 spatial pixels = 25,088 neurons
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(512 * 7 * 7, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        x = self.block5(x)
+        x = self.classifier(x)
+        return x
