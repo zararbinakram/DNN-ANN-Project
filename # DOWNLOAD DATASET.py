@@ -655,3 +655,59 @@ history_3layer = train_and_validate_model(cnn3, "Custom_3_Layer_CNN", train_load
 history_4layer = train_and_validate_model(cnn4, "Custom_4_Layer_CNN", train_loader, val_loader, epochs=5)
 history_5layer = train_and_validate_model(cnn5, "Custom_5_Layer_CNN", train_loader, val_loader, epochs=5)
 print("\n[SUCCESS] All custom architectures trained successfully on GPU.")
+
+#----------------------------NEXT STEP--------------------------
+# LOAD AND ADAPT PRE-TRAINED MODELS
+
+# ==============================================================================
+# Name: Zarar Bin Akram
+# SRN: 303-221057
+# File: Task 3.1 - Pre-trained Models Initialization
+# Description: Loads VGG16, ResNet50, and MobileNetV2 from torchvision and
+#              reconfigures their final dense layers for 8-class classification.
+# ==============================================================================
+
+import torch
+import torch.nn as nn
+import torchvision.models as models
+
+def initialize_pretrained_models(num_classes=8):
+    """
+    Purpose:
+        Loads state-of-the-art pre-trained architectures and modifies their
+        final classification layers to match the target dataset's class count.
+    Inputs:
+        num_classes (int): Number of target output categories (8 for BloodMNIST).
+    Outputs:
+        vgg16, resnet50, mobilenet (nn.Module): Ready-to-train model instances.
+    """
+    print("[INFO] Fetching pre-trained architectures from torchvision hubs...")
+
+    # 1. Initialize VGG16
+    vgg16 = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
+    # Reconfigure the 6th layer of the classifier sequence
+    in_features_vgg = vgg16.classifier[6].in_features
+    vgg16.classifier[6] = nn.Linear(in_features_vgg, num_classes)
+
+    # 2. Initialize ResNet50
+    resnet50 = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    # Reconfigure the final fully-connected (fc) layer
+    in_features_res = resnet50.fc.in_features
+    resnet50.fc = nn.Linear(in_features_res, num_classes)
+
+    # 3. Initialize MobileNetV2
+    mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
+    # Reconfigure the 1st layer of the final classifier pair
+    in_features_mobile = mobilenet.classifier[1].in_features
+    mobilenet.classifier[1] = nn.Linear(in_features_mobile, num_classes)
+
+    print("[SUCCESS] All pre-trained heads successfully mapped to 8 output nodes.")
+    return vgg16, resnet50, mobilenet
+
+# Instantiate the architectures
+vgg16, resnet50, mobilenet = initialize_pretrained_models(num_classes=8)
+
+# Ship models over to the active GPU runtime
+vgg16 = vgg16.to(device)
+resnet50 = resnet50.to(device)
+mobilenet = mobilenet.to(device)
