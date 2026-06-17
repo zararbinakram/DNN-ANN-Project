@@ -711,3 +711,137 @@ vgg16, resnet50, mobilenet = initialize_pretrained_models(num_classes=8)
 vgg16 = vgg16.to(device)
 resnet50 = resnet50.to(device)
 mobilenet = mobilenet.to(device)
+
+#----------------------------NEXT STEP--------------------------
+# TRAINING AND EVALUATIING PRE-TRAINED MODELS
+
+# ==============================================================================
+# Name: Zarar Bin Akram
+# SRN: 303-221057
+# File: Task 3.2 & 3.3 - Pre-trained Training & Evaluation Pipeline
+# Description: Fine-tunes pre-trained models on BloodMNIST and evaluates
+#              them on the test split with full macro performance metrics.
+# ==============================================================================
+
+import torch.optim as optim
+import torch.nn as nn
+import pandas as pd
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
+
+def train_and_evaluate_pretrained(models_dict, train_loader, test_loader, epochs=3, lr=0.0001):
+    """
+    Purpose:
+        Fine-tunes the provided pre-trained models, runs final inference
+        on the test set, and builds comparative performance profiles.
+    Inputs:
+        models_dict (dict): Dictionary of pre-trained PyTorch models.
+        train_loader (DataLoader): Training data stream.
+        test_loader (DataLoader): Testing data stream.
+        epochs (int): Number of training updates per model. Default is 3 for speed.
+        lr (float): Finetuning learning rate. Default is 0.0001.
+    """
+    criterion = nn.CrossEntropyLoss()
+    pretrained_records = []
+    saved_preds = {}
+
+    # Extract true labels for mapping metrics
+    true_labels = []
+    for _, labels in test_loader:
+        true_labels.extend(labels.numpy())
+    true_labels = np.array(true_labels)
+
+    blood_cell_names = ['Basophil', 'Eosinophil', 'Erythroblast', 'Immature Granulocyte',
+                        'Lymphocyte', 'Monocyte', 'Neutrophil', 'Platelet']
+
+    for name, model in models_dict.items():
+        print("\n" + "="*60)
+        print(f"[START FINE-TUNING] Model Target: {name}")
+        print("="*60)
+
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+
+        # --- 1. FINE-TUNING LOOP ---
+        for epoch in range(epochs):
+            model.train()
+            running_loss = 0.0
+            correct = 0
+            total = 0
+
+            for images, labels in train_loader:
+                images, labels = images.to(device), labels.to(device)
+
+                optimizer.zero_grad()
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                running_loss += loss.item() * images.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+            epoch_loss = running_loss / len(train_loader.dataset)
+            epoch_acc = (correct / total) * 100
+            print(f"Epoch [{epoch+1}/{epochs}] -> Fine-Tuning Loss: {epoch_loss:.4f} | Training Acc: {epoch_acc:.2f}%")
+
+        # --- 2. EVALUATION PHASE ---
+        model.eval()
+        predictions = []
+
+        with torch.no_grad():
+            for images, _ in test_loader:
+                images = images.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs, 1)
+                predictions.extend(predicted.cpu().numpy())
+
+        predictions = np.array(predictions)
+        saved_preds[name] = predictions
+
+        # Calculate Macro Metrics
+        precision, recall, f1, _ = precision_recall_fscore_support(true_labels, predictions, average='macro')
+        accuracy = np.mean(predictions == true_labels) * 100
+
+        pretrained_records.append({
+            "Pre-trained Model": name,
+            "Test Accuracy (%)": f"{accuracy:.2f}%",
+            "Macro Precision": f"{precision:.4f}",
+            "Macro Recall": f"{recall:.4f}",
+            "Macro F1-Score": f"{f1:.4f}"
+        })
+        print(f"[INFO] Performance Extraction complete for {name}.")
+
+    # --- 3. COMPARATIVE VISUALIZATION DISPLAY ---
+    df_pretrained = pd.DataFrame(pretrained_records)
+    print("\n" + "="*60 + "\n### PRE-TRAINED TRANSFER LEARNING PERFORMANCE ###\n" + "="*60)
+    print(df_pretrained.to_string(index=False))
+    print("-" * 60)
+
+    # Plot Confusion Matrices
+    fig, axes = plt.subplots(1, 3, figsize=(22, 6))
+    for i, (name, predictions) in enumerate(saved_preds.items()):
+        cm = confusion_matrix(true_labels, predictions)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Oranges', ax=axes[i],
+                    xticklabels=blood_cell_names, yticklabels=blood_cell_names, cbar=False)
+        axes[i].set_title(f"Confusion Matrix: {name}", fontsize=11, fontweight='bold')
+        axes[i].set_xticklabels(blood_cell_names, rotation=45, ha='right')
+        axes[i].set_ylabel("True Labels")
+        axes[i].set_xlabel("Predicted Labels")
+
+    plt.suptitle("Task 3.3: Pre-trained Architecture Test Set Confusion Matrices Profiles", fontsize=14, fontweight='bold', y=1.05)
+    plt.tight_layout()
+    plt.show()
+
+# Package pre-trained instances for optimization run
+pretrained_models_suite = {
+    "VGG16_Pretrained": vgg16,
+    "ResNet50_Pretrained": resnet50,
+    "MobileNetV2_Pretrained": mobilenet
+}
+
+# Run the execution suite
+train_and_evaluate_pretrained(pretrained_models_suite, train_loader, test_loader, epochs=3)
