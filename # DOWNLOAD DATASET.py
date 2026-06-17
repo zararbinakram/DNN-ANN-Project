@@ -495,3 +495,163 @@ class CustomCNN5Layer(nn.Module):
         x = self.block5(x)
         x = self.classifier(x)
         return x
+    
+    #----------------------------NEXT STEP--------------------------
+    # ==============================================================================
+# Name: Zarar Bin Akram
+# SRN: 303-221057
+# File: Task 2.2 - Self-Contained GPU Training Execution
+# Description: Fully self-contained initialization and training execution
+#              to bypass memory loss from Colab runtime resets.
+# ==============================================================================
+
+import os
+import urllib.request
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
+import matplotlib.pyplot as plt
+
+# 1. Ensure Local Directories Exist
+os.makedirs("data/raw", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+
+# 2. Redownload Dataset if Colab completely wiped the disk during runtime switch
+file_path = "data/raw/bloodmnist.npz"
+if not os.path.exists(file_path):
+    print("[INFO] Dataset missing from disk reset. Redownloading...")
+    source_url = "https://zenodo.org/record/6496656/files/bloodmnist.npz?download=1"
+    urllib.request.urlretrieve(source_url, file_path)
+print("[INFO] Raw data file verified.")
+
+# 3. Set Deterministic Seeds
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+
+# 4. Reconstruct Dataset and DataLoaders
+class BloodMNISTDataset(Dataset):
+    def __init__(self, images, labels, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+    def __len__(self):
+        return len(self.images)
+    def __getitem__(self, idx):
+        img = Image.fromarray(self.images[idx])
+        if self.transform:
+            img = self.transform(img)
+        label = torch.tensor(self.labels[idx], dtype=torch.long)
+        return img, label
+
+print("[INFO] Loading arrays into memory...")
+raw_data = np.load(file_path)
+preprocessing_transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
+
+train_loader = DataLoader(BloodMNISTDataset(raw_data['train_images'], raw_data['train_labels'].flatten(), transform=preprocessing_transforms), batch_size=64, shuffle=True)
+val_loader = DataLoader(BloodMNISTDataset(raw_data['val_images'], raw_data['val_labels'].flatten(), transform=preprocessing_transforms), batch_size=64, shuffle=False)
+test_loader = DataLoader(BloodMNISTDataset(raw_data['test_images'], raw_data['test_labels'].flatten(), transform=preprocessing_transforms), batch_size=64, shuffle=False)
+
+# 5. Define the Hyper-Optimized Architectures (with Global Average Pooling for speed)
+class CustomCNN3Layer(nn.Module):
+    def __init__(self, num_classes=8):
+        super(CustomCNN3Layer, self).__init__()
+        self.block1 = nn.Sequential(nn.Conv2d(3, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block2 = nn.Sequential(nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block3 = nn.Sequential(nn.Conv2d(64, 128, kernel_size=3, padding=1), nn.BatchNorm2d(128), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.3))
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Sequential(nn.Flatten(), nn.Linear(128, 256), nn.ReLU(), nn.Dropout(0.5), nn.Linear(256, num_classes))
+    def forward(self, x):
+        return self.classifier(self.global_pool(self.block3(self.block2(self.block1(x)))))
+
+class CustomCNN4Layer(nn.Module):
+    def __init__(self, num_classes=8):
+        super(CustomCNN4Layer, self).__init__()
+        self.block1 = nn.Sequential(nn.Conv2d(3, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block2 = nn.Sequential(nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block3 = nn.Sequential(nn.Conv2d(64, 128, kernel_size=3, padding=1), nn.BatchNorm2d(128), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.3))
+        self.block4 = nn.Sequential(nn.Conv2d(128, 256, kernel_size=3, padding=1), nn.BatchNorm2d(256), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.3))
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Sequential(nn.Flatten(), nn.Linear(256, 256), nn.ReLU(), nn.Dropout(0.5), nn.Linear(256, num_classes))
+    def forward(self, x):
+        return self.classifier(self.global_pool(self.block4(self.block3(self.block2(self.block1(x))))))
+
+class CustomCNN5Layer(nn.Module):
+    def __init__(self, num_classes=8):
+        super(CustomCNN5Layer, self).__init__()
+        self.block1 = nn.Sequential(nn.Conv2d(3, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block2 = nn.Sequential(nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.25))
+        self.block3 = nn.Sequential(nn.Conv2d(64, 128, kernel_size=3, padding=1), nn.BatchNorm2d(128), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.3))
+        self.block4 = nn.Sequential(nn.Conv2d(128, 256, kernel_size=3, padding=1), nn.BatchNorm2d(256), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.3))
+        self.block5 = nn.Sequential(nn.Conv2d(256, 512, kernel_size=3, padding=1), nn.BatchNorm2d(512), nn.ReLU(), nn.MaxPool2d(2, 2), nn.Dropout(0.4))
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Sequential(nn.Flatten(), nn.Linear(512, 512), nn.ReLU(), nn.Dropout(0.5), nn.Linear(512, num_classes))
+    def forward(self, x):
+        return self.classifier(self.global_pool(self.block5(self.block4(self.block3(self.block2(self.block1(x)))))))
+
+# 6. Initialize Models on Active Device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"[INFO] Training target environment: {device}")
+
+cnn3 = CustomCNN3Layer(num_classes=8).to(device)
+cnn4 = CustomCNN4Layer(num_classes=8).to(device)
+cnn5 = CustomCNN5Layer(num_classes=8).to(device)
+
+# 7. Training and Validation Engine Block
+def train_and_validate_model(model, model_name, train_loader, val_loader, epochs=5):
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
+
+    print(f"\n--- Training Engine: {model_name} ---")
+    for epoch in range(epochs):
+        model.train()
+        running_loss, correct_train, total_train = 0.0, 0, 0
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item() * images.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            total_train += labels.size(0)
+            correct_train += (predicted == labels).sum().item()
+
+        # Validation
+        model.eval()
+        running_val_loss, correct_val, total_val = 0.0, 0, 0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                running_val_loss += loss.item() * images.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                total_val += labels.size(0)
+                correct_val += (predicted == labels).sum().item()
+
+        history['train_loss'].append(running_loss / len(train_loader.dataset))
+        history['train_acc'].append((correct_train / total_train) * 100)
+        history['val_loss'].append(running_val_loss / len(val_loader.dataset))
+        history['val_acc'].append((correct_val / total_val) * 100)
+
+        print(f"Epoch [{epoch+1}/{epochs}] -> Train Loss: {history['train_loss'][-1]:.4f} | Val Acc: {history['val_acc'][-1]:.2f}%")
+    return history
+
+# Run training loops sequentially
+history_3layer = train_and_validate_model(cnn3, "Custom_3_Layer_CNN", train_loader, val_loader, epochs=5)
+history_4layer = train_and_validate_model(cnn4, "Custom_4_Layer_CNN", train_loader, val_loader, epochs=5)
+history_5layer = train_and_validate_model(cnn5, "Custom_5_Layer_CNN", train_loader, val_loader, epochs=5)
+print("\n[SUCCESS] All custom architectures trained successfully on GPU.")
