@@ -927,3 +927,132 @@ for p in bar2.patches:
 plt.suptitle("Task 4: Final Project Performance Analysis Dashboard (BloodMNIST)", fontsize=14, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.show()
+
+#----------------------------NEXT STEP--------------------------
+# ==============================================================================
+# Name: Zarar Bin Akram
+# SNO : 303-221057
+# File: Task 4 - Explainable AI (XAI) Pipeline
+# Description: Implements Grad-CAM on the top-performing custom network
+#              and pre-trained network to fulfill Task 4 requirements.
+# ==============================================================================
+
+import cv2
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+
+class TargetGradCAM:
+    """
+    Purpose:
+        Applies Gradient-weighted Class Activation Mapping (Grad-CAM) to any
+        PyTorch architecture by leveraging execution hooks on convolutional layers.
+    """
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.target_layer = target_layer
+        self.gradients = None
+        self.activations = None
+
+        # Define and bind hooks
+        self.f_hook = self.target_layer.register_forward_hook(self.extract_activations)
+        self.b_hook = self.target_layer.register_full_backward_hook(self.extract_gradients)
+
+    def extract_activations(self, module, input, output):
+        self.activations = output.detach()
+
+    def extract_gradients(self, module, grad_input, grad_output):
+        self.gradients = grad_output[0].detach()
+
+    def build_heatmap(self, input_tensor, target_class=None):
+        self.model.eval()
+        outputs = self.model(input_tensor)
+
+        if target_class is None:
+            target_class = torch.argmax(outputs, dim=1).item()
+
+        self.model.zero_grad()
+        class_loss = outputs[0, target_class]
+        class_loss.backward()
+
+        # Convert collected maps to numpy arrays
+        grads = self.gradients.cpu().numpy()[0]
+        acts = self.activations.cpu().numpy()[0]
+
+        # Calculate pool weights across spatial regions
+        weights = np.mean(grads, axis=(1, 2))
+
+        # Perform linear combination
+        cam = np.zeros(acts.shape[1:], dtype=np.float32)
+        for i, w in enumerate(weights):
+            cam += w * acts[i]
+
+        # Apply ReLU modification to clip negative influence
+        cam = np.maximum(cam, 0)
+        cam = cv2.resize(cam, (224, 224))
+
+        # Scale range cleanly to [0, 1]
+        if np.max(cam) != np.min(cam):
+            cam = (cam - np.min(cam)) / (np.max(cam) - np.min(cam))
+        else:
+            cam = np.zeros_like(cam)
+
+        return cam, target_class
+
+    def release_hooks(self):
+        self.f_hook.remove()
+        self.b_hook.remove()
+
+# --- 1. PREPARE TRACKING CHANNELS ---
+# Target the final Convolutional layer within each model family
+custom_cam_engine = TargetGradCAM(cnn4, cnn4.block4[0])          # Custom 4-Layer Conv Line
+pretrained_cam_engine = TargetGradCAM(resnet50, resnet50.layer4[-1]) # ResNet50 Layer4 final block
+
+# Fetch a single test sample for visualization
+images, labels = next(iter(test_loader))
+test_sample = images[2].unsqueeze(0).to(device)  # Index 2 sample
+ground_truth_label = labels[2].item()
+
+blood_cell_names = ['Basophil', 'Eosinophil', 'Erythroblast', 'Immature Granulocyte',
+                    'Lymphocyte', 'Monocyte', 'Neutrophil', 'Platelet']
+
+# --- 2. GENERATE HEATMAP ACTIVATIONS ---
+heatmap_custom, pred_custom = custom_cam_engine.build_heatmap(test_sample)
+heatmap_pretrained, pred_pretrained = pretrained_cam_engine.build_heatmap(test_sample)
+
+# Clean up memory hooks
+custom_cam_engine.release_hooks()
+pretrained_cam_engine.release_hooks()
+
+# --- 3. POST-PROCESS RAW IMAGE FOR VISUALIZATION ---
+raw_img_np = images[2].permute(1, 2, 0).numpy()
+# Reverse baseline scaling to display clean color space
+raw_img_np = np.clip((raw_img_np * 0.5 + 0.5), 0, 1)
+
+def apply_heatmap_overlay(orig_img, intensity_map):
+    colored_map = cv2.applyColorMap(np.uint8(255 * intensity_map), cv2.COLORMAP_JET)
+    colored_map = cv2.cvtColor(colored_map, cv2.COLOR_BGR2RGB) / 255.0
+    overlay = colored_map * 0.4 + orig_img * 0.6
+    return np.clip(overlay, 0, 1)
+
+overlay_custom = apply_heatmap_overlay(raw_img_np, heatmap_custom)
+overlay_pretrained = apply_heatmap_overlay(raw_img_np, heatmap_pretrained)
+
+# --- 4. RENDER COMPARATIVE PLOTS ---
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+axes[0].imshow(raw_img_np)
+axes[0].set_title(f"Original Blood Cell Image\nTrue Class: {blood_cell_names[ground_truth_label]}", fontsize=11, fontweight='bold')
+axes[0].axis('off')
+
+axes[1].imshow(overlay_custom)
+axes[1].set_title(f"Best Custom CNN (4-Layer)\nPredicted: {blood_cell_names[pred_custom]}", fontsize=11, fontweight='bold')
+axes[1].axis('off')
+
+axes[2].imshow(overlay_pretrained)
+axes[2].set_title(f"Best Pre-trained (ResNet50)\nPredicted: {blood_cell_names[pred_pretrained]}", fontsize=11, fontweight='bold')
+axes[2].axis('off')
+
+plt.suptitle("Task 4: Explainable AI (XAI) Grad-CAM Visual Interpretability Mapping", fontsize=14, fontweight='bold', y=1.05)
+plt.tight_layout()
+plt.show()
